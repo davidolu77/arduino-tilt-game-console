@@ -6,6 +6,7 @@
 
 namespace {
 
+// Display, input, and sensor configuration for the whole console.
 constexpr uint8_t SCREEN_WIDTH = 128;
 constexpr uint8_t SCREEN_HEIGHT = 64;
 constexpr uint8_t OLED_RESET = 255;
@@ -49,24 +50,28 @@ constexpr unsigned long COIN_COLLECTOR_TIME_LIMIT_MS = 20000;
 constexpr uint8_t COIN_COLLECTOR_BASE_TARGET = 8;
 constexpr int COIN_RADIUS = 2;
 
+// High-level app states used by the main menu and both games.
 enum class AppState {
   Menu,
   Playing,
   GameOver,
 };
 
+// The single physical button is translated into these events.
 enum class ButtonEvent {
   None,
   ShortPress,
   LongPress,
 };
 
+// A game update can continue, end in a win, or end in a loss.
 enum class PlayResult {
   Ongoing,
   Won,
   Lost,
 };
 
+// Debounce and hold timing state for the push button.
 struct ButtonTracker {
   bool stableState = HIGH;
   bool previousRawState = HIGH;
@@ -74,6 +79,7 @@ struct ButtonTracker {
   unsigned long pressStartedMs = 0;
 };
 
+// Small rectangle helper used for maze walls and goal zones.
 struct Rect {
   int16_t x;
   int16_t y;
@@ -83,6 +89,7 @@ struct Rect {
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+// Final public menu only contains the two implemented games.
 constexpr size_t GAME_COUNT = 2;
 const char *const GAME_NAMES[GAME_COUNT] = {
     "Tilt Maze",
@@ -108,6 +115,7 @@ constexpr Rect TILT_MAZE_GOAL = {108, 28, 14, 14};
 constexpr float TILT_MAZE_START_X = 7.0f;
 constexpr float TILT_MAZE_START_Y = 22.0f;
 
+// Shared runtime state for movement, calibration, scores, and active screen.
 float ballX = BALL_START_X;
 float ballY = BALL_START_Y;
 uint8_t imuAddress = 0;
@@ -130,6 +138,11 @@ ButtonTracker buttonTracker;
 size_t selectedGameIndex = 0;
 size_t activeGameIndex = 0;
 
+// ---------------------------------------------------------------------------
+// Sound helpers
+// ---------------------------------------------------------------------------
+
+// Simple buzzer helper used by the menu and both games.
 void playTone(uint16_t frequency, uint16_t durationMs) {
   tone(BUZZER_PIN, frequency, durationMs);
 }
@@ -162,6 +175,10 @@ void playCoinBeep() {
   playTone(2200, 55);
 }
 
+// ---------------------------------------------------------------------------
+// Setup and persistence helpers
+// ---------------------------------------------------------------------------
+
 void showFatalError(const __FlashStringHelper *message) {
   Serial.println(message);
 
@@ -185,6 +202,7 @@ void initButtonAndBuzzer() {
   noTone(BUZZER_PIN);
 }
 
+// Store only one byte for the high score to keep EEPROM usage tiny.
 void loadHighScore() {
   if (EEPROM.read(EEPROM_MAGIC_ADDR) != EEPROM_MAGIC) {
     EEPROM.update(EEPROM_MAGIC_ADDR, EEPROM_MAGIC);
@@ -200,6 +218,7 @@ void saveHighScore(uint8_t score) {
   EEPROM.update(EEPROM_HIGHSCORE_ADDR, highScore);
 }
 
+// Draw a simple splash title while the rest of the hardware is being prepared.
 void initDisplay() {
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
     while (true) {
@@ -217,6 +236,11 @@ void initDisplay() {
   display.display();
 }
 
+// ---------------------------------------------------------------------------
+// IMU / I2C helpers
+// ---------------------------------------------------------------------------
+
+// The OLED and IMU share the same I2C bus, so startup begins by probing addresses.
 bool i2cDevicePresent(uint8_t address) {
   Wire.beginTransmission(address);
   return Wire.endTransmission() == 0;
@@ -265,6 +289,8 @@ void printI2cScan() {
   }
 }
 
+// This project targets an MPU-6500-family board, but we still detect the chip
+// at runtime because breakout boards in this family often vary by exact sensor.
 bool detectImu() {
   const uint8_t candidateAddresses[] = {IMU_ADDR_PRIMARY, IMU_ADDR_SECONDARY};
 
@@ -318,6 +344,7 @@ void showCalibrationMessage() {
   display.display();
 }
 
+// Wake the IMU and set the accelerometer to its default +/-2g range.
 void initImu() {
   printI2cScan();
 
@@ -338,6 +365,7 @@ void initImu() {
   }
 }
 
+// Read the latest accelerometer sample directly from the IMU register map.
 bool readAccelRaw(int16_t &rawX, int16_t &rawY, int16_t &rawZ) {
   uint8_t buffer[6];
   if (!readRegisters(imuAddress, REG_ACCEL_XOUT_H, buffer, sizeof(buffer))) {
@@ -360,6 +388,11 @@ void showSensorReadError() {
   display.display();
 }
 
+// ---------------------------------------------------------------------------
+// Shared gameplay state helpers
+// ---------------------------------------------------------------------------
+
+// Each game gets its own spawn/reset behavior, but both still use the same ball.
 void resetBall() {
   if (activeGameIndex == TILT_MAZE_INDEX) {
     ballX = TILT_MAZE_START_X;
@@ -378,11 +411,14 @@ bool circlesOverlap(float ax, float ay, int ar, float bx, float by, int br) {
   return (dx * dx + dy * dy) <= (combined * combined);
 }
 
+// Coin Collector scales difficulty from the saved best score, but never starts
+// below the base target so the game stays meaningful on a fresh EEPROM.
 uint8_t targetScoreForNextRound() {
   const uint8_t beatHighScoreTarget = static_cast<uint8_t>(highScore + 1);
   return beatHighScoreTarget > COIN_COLLECTOR_BASE_TARGET ? beatHighScoreTarget : COIN_COLLECTOR_BASE_TARGET;
 }
 
+// Pick a coin position away from the player so a new round does not instantly score.
 void spawnCoin() {
   const float minX = 10.0f;
   const float maxX = SCREEN_WIDTH - 10.0f;
@@ -404,6 +440,7 @@ void spawnCoin() {
   coinY = SCREEN_HEIGHT / 2.0f;
 }
 
+// Reset per-round state whenever a game starts or restarts.
 void prepareGameRound() {
   resetBall();
 
@@ -415,6 +452,8 @@ void prepareGameRound() {
   }
 }
 
+// Calibrate the player's natural hand position so slight resting tilt does not
+// make the ball drift on startup.
 void calibrateNeutralTilt() {
   showCalibrationMessage();
   delay(700);
@@ -459,6 +498,11 @@ float applyDeadzone(float value) {
   return value;
 }
 
+// ---------------------------------------------------------------------------
+// Input handling
+// ---------------------------------------------------------------------------
+
+// Convert raw button transitions into short-press and long-press events.
 ButtonEvent readButtonEvent() {
   const bool rawState = digitalRead(BUTTON_PIN);
 
@@ -490,6 +534,11 @@ ButtonEvent readButtonEvent() {
   return ButtonEvent::ShortPress;
 }
 
+// ---------------------------------------------------------------------------
+// Collision and game update logic
+// ---------------------------------------------------------------------------
+
+// Circle-vs-rectangle collision is used for both maze walls and the maze goal.
 bool circleTouchesRect(float cx, float cy, int16_t radius, const Rect &rect) {
   const float closestX = constrain(cx, static_cast<float>(rect.x), static_cast<float>(rect.x + rect.w));
   const float closestY = constrain(cy, static_cast<float>(rect.y), static_cast<float>(rect.y + rect.h));
@@ -511,6 +560,8 @@ bool ballTouchesMazeWall(float cx, float cy) {
   return false;
 }
 
+// Shared movement code for both games. The same tilt input drives the player ball,
+// but each game interprets collisions and win/loss conditions differently.
 PlayResult updateTiltBall() {
   int16_t rawX = 0;
   int16_t rawY = 0;
@@ -543,6 +594,7 @@ PlayResult updateTiltBall() {
   nextBallY = constrain(nextBallY, minY, maxY);
 
   if (activeGameIndex == TILT_MAZE_INDEX) {
+    // Resolve X and Y separately so the ball can slide along maze walls naturally.
     if (!ballTouchesMazeWall(nextBallX, ballY)) {
       ballX = nextBallX;
     }
@@ -555,6 +607,7 @@ PlayResult updateTiltBall() {
       return PlayResult::Won;
     }
   } else if (activeGameIndex == COIN_COLLECTOR_INDEX) {
+    // Coin Collector is more open: move freely, collect coins, beat the timer.
     ballX = nextBallX;
     ballY = nextBallY;
 
@@ -606,6 +659,11 @@ PlayResult updateTiltBall() {
   return PlayResult::Ongoing;
 }
 
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+// Draw the menu and highlight the currently selected game.
 void drawMenuScreen() {
   display.clearDisplay();
   display.setTextSize(1);
@@ -638,6 +696,7 @@ void drawMenuScreen() {
   display.display();
 }
 
+// Draw the active game screen, including HUD and player/coin/maze elements.
 void drawPlayingScreen() {
   display.clearDisplay();
   display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
@@ -645,6 +704,7 @@ void drawPlayingScreen() {
   display.setTextColor(SSD1306_WHITE);
 
   if (activeGameIndex == TILT_MAZE_INDEX) {
+    // Maze keeps a compact title bar plus a footer marker for the goal.
     display.drawLine(0, 10, SCREEN_WIDTH - 1, 10, SSD1306_WHITE);
     display.setCursor(3, 1);
     display.print(GAME_NAMES[activeGameIndex]);
@@ -658,6 +718,7 @@ void drawPlayingScreen() {
     display.setCursor(2, 57);
     display.print(F("Goal"));
   } else if (activeGameIndex == COIN_COLLECTOR_INDEX) {
+    // Coin Collector uses a two-line HUD so score, best score, and timer fit cleanly.
     const unsigned long msRemaining = roundEndsAtMs > millis() ? roundEndsAtMs - millis() : 0;
     const uint8_t secondsRemaining = static_cast<uint8_t>(msRemaining / 1000);
 
@@ -706,6 +767,8 @@ void drawPlayingScreen() {
   display.display();
 }
 
+// Reuse the same end screen state for wins and losses, but customize the text
+// slightly for Coin Collector so running out of time is easier to understand.
 void drawGameOverScreen() {
   display.clearDisplay();
   display.setTextSize(1);
@@ -742,6 +805,11 @@ void drawGameOverScreen() {
   display.display();
 }
 
+// ---------------------------------------------------------------------------
+// State transitions
+// ---------------------------------------------------------------------------
+
+// Start whichever game is currently selected in the menu.
 void startSelectedGame() {
   activeGameIndex = selectedGameIndex;
   prepareGameRound();
@@ -761,6 +829,7 @@ void restartCurrentGame() {
   Serial.println(GAME_NAMES[activeGameIndex]);
 }
 
+// Return from gameplay to the menu without powering the console down.
 void goToMenu() {
   appState = AppState::Menu;
   selectedGameIndex = activeGameIndex;
@@ -768,6 +837,7 @@ void goToMenu() {
   Serial.println(F("Returned to menu"));
 }
 
+// Game over includes both losses and successful finishes.
 void triggerGameOver(bool won) {
   appState = AppState::GameOver;
   gameOverAtMs = millis();
@@ -784,6 +854,7 @@ void triggerGameOver(bool won) {
   }
 }
 
+// Main menu behavior: tap to cycle, hold to launch.
 void updateMenu(ButtonEvent event) {
   if (event == ButtonEvent::ShortPress) {
     selectedGameIndex = (selectedGameIndex + 1) % GAME_COUNT;
@@ -795,6 +866,7 @@ void updateMenu(ButtonEvent event) {
   drawMenuScreen();
 }
 
+// In-game behavior: tilt updates movement, hold returns to menu.
 void updatePlaying(ButtonEvent event) {
   if (event == ButtonEvent::LongPress) {
     goToMenu();
@@ -818,6 +890,7 @@ void updatePlaying(ButtonEvent event) {
   drawPlayingScreen();
 }
 
+// End-screen behavior: tap restarts, hold returns to menu.
 void updateGameOver(ButtonEvent event) {
   if ((millis() - gameOverAtMs) < GAME_OVER_HOLD_MS) {
     drawGameOverScreen();
@@ -841,10 +914,12 @@ void updateGameOver(ButtonEvent event) {
 
 }  // namespace
 
+// Hardware bring-up happens once here, followed by IMU calibration and the menu.
 void setup() {
   Serial.begin(115200);
   delay(200);
 
+  // Seed randomness for Coin Collector respawns and bring up shared hardware first.
   Wire.begin();
   Wire.setClock(400000);
   randomSeed(micros());
@@ -862,7 +937,10 @@ void setup() {
   Serial.println(F("Tilt Game Console Phase 3 ready"));
 }
 
+// The main loop repeatedly gathers button input, then delegates to the active state.
 void loop() {
+  // The main loop is intentionally simple: read one button event, then let the
+  // current app state decide how to update and redraw the screen.
   const ButtonEvent event = readButtonEvent();
 
   switch (appState) {
