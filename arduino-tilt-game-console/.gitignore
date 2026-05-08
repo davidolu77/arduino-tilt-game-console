@@ -2,15 +2,10 @@
 .pio/
 .pioenvs/
 .piolibdeps/
-**/.pio/
-**/.pioenvs/
-**/.piolibdeps/
 
 # VS Code
 .vscode/*
 !.vscode/extensions.json
-**/.vscode/*
-!**/.vscode/extensions.json
 
 # OS files
 .DS_Store
@@ -19,6 +14,3 @@ desktop.ini
 
 # Logs / temporary files
 *.log
-
-# Unfinished experiments
-arduino-fluid-simulator/

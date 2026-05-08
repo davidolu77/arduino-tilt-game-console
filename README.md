@@ -1,65 +1,77 @@
-# Arduino Tilt Game Console
+# Arduino OLED IMU Projects
 
-A tilt-controlled mini game console built with an Arduino Nano, a 128x64 OLED display, an MPU-6500-family motion sensor, a push button, and a buzzer.
-
-The final build includes two playable games:
-- `Tilt Maze`
-- `Coin Collector`
-
-## Project Overview
-
-This project turns a simple Arduino breadboard build into a small motion-controlled game console. The player tilts the console to move a ball on screen, uses a single push button to navigate menus and restart games, and gets audio feedback from a passive buzzer.
-
-The system boots into a menu, lets the player choose a game, and then runs one of two experiences:
-- `Tilt Maze`: guide the ball through a maze and reach the goal
-- `Coin Collector`: collect coins before time runs out and beat the saved high score target
-
-## Features
-
-- Tilt-based control using an MPU-6500-family motion sensor
-- OLED menu with two games
-- Single-button short press / long press navigation
-- Buzzer feedback for menu moves, selection, coin collection, wins, and game over
-- Playable `Tilt Maze`
-- Playable `Coin Collector`
-- EEPROM high score saving for `Coin Collector`
-- Built with PlatformIO for reproducible setup and library management
-
-## Demo / Images
-
-### Main menu
-
-![Main Menu](docs/images/menu.jpeg)
-
-### Gameplay
-
-![Tilt Maze](docs/images/tilt-maze.jpeg)
-![Coin Collector](docs/images/coin-collector.jpeg)
-
-### End screens
-
-![Tilt Maze Win](docs/images/tilt-maze-win.jpeg)
-![Coin Collector Win](docs/images/coin-collector-win.jpeg)
-![Coin Collector Time Up](docs/images/coin-collector-lose.jpeg)
-
-### Wiring / Build photo
-
-![Wiring Photo](docs/images/wiring-photo.jpeg)
-
-If you record a short GIF or demo video later, add it near the top of this section.
-
-## Hardware Used
+A collection of Arduino Nano projects built around the same small handheld hardware setup:
 
 - Arduino Nano (`ATmega328P`)
-- 0.96" I2C OLED display (`128x64`, SSD1306-style)
-- MPU-6500-family motion sensor module
-- Passive buzzer
-- Push button
-- Breadboard
-- Jumper wires
-- USB cable
+- 128x64 I2C OLED display
+- MPU-6500-family IMU motion sensor
+- single push button
+- passive buzzer
 
-## Wiring Summary
+The projects use tilt input from the IMU, simple OLED graphics, and PlatformIO for repeatable builds and uploads.
+
+## Projects
+
+### Arduino Tilt Game Console
+
+Folder: [`arduino-tilt-game-console`](arduino-tilt-game-console/)
+
+The original two-game tilt console. It includes:
+
+- `Tilt Maze`
+- `Coin Collector`
+- OLED menu
+- IMU tilt control
+- button navigation
+- buzzer feedback
+- EEPROM high score saving for Coin Collector
+
+See the project README:
+
+[`arduino-tilt-game-console/README.md`](arduino-tilt-game-console/README.md)
+
+### Arduino Tilt Arcade Console
+
+Folder: [`arduino-tilt-arcade-console`](arduino-tilt-arcade-console/)
+
+A newer two-game arcade console using the same hardware. It includes:
+
+- `Tilt Snake`
+- `Space Dodger`
+- per-game tilt calibration
+- saved calibration values
+- saved high scores
+- pause mode
+- countdowns
+- idle title screen
+- improved game-over screens
+- known-good diagnostic/test sketches
+
+See the project README:
+
+[`arduino-tilt-arcade-console/README.md`](arduino-tilt-arcade-console/README.md)
+
+## Repository Layout
+
+```text
+arduino-oled-imu-projects/
+  README.md
+  .gitignore
+  arduino-tilt-game-console/
+    README.md
+    platformio.ini
+    src/
+    docs/
+  arduino-tilt-arcade-console/
+    README.md
+    platformio.ini
+    src/
+    test/
+```
+
+## Hardware Wiring
+
+Both finished projects use the same wiring.
 
 ### OLED
 
@@ -68,7 +80,7 @@ If you record a short GIF or demo video later, add it near the top of this secti
 - `SDA -> A4`
 - `SCL -> A5`
 
-### Motion Sensor
+### IMU
 
 - `GND -> GND`
 - `VCC -> 5V`
@@ -86,114 +98,39 @@ If you record a short GIF or demo video later, add it near the top of this secti
 - positive -> `D9`
 - negative -> `GND`
 
-## How It Works
+## Building A Project
 
-At startup, the Arduino:
-1. Initializes the OLED, buzzer, button, and motion sensor
-2. Detects the IMU over I2C
-3. Calibrates a neutral tilt position
-4. Opens the game selection menu
+Open the project folder you want to build, then run PlatformIO from inside that folder.
 
-During use:
-- short press moves to the next game in the menu
-- long press starts the selected game
-- tilting the console moves the player ball
-- short press on end screens restarts the current game
-- long press on end screens returns to the menu
-
-### Tilt Maze
-
-The ball moves through a drawn maze. Collision checks stop it from passing through walls. Reaching the goal box triggers a win.
-
-### Coin Collector
-
-The ball moves around the screen collecting coins. Each collected coin plays a sound and increments the score. The player must reach the round target before the time limit runs out. The highest score is saved in EEPROM.
-
-## Software / Libraries
-
-This repository is set up as a **PlatformIO** project.
-
-### PlatformIO dependencies
-
-- `adafruit/Adafruit SSD1306`
-- `adafruit/Adafruit GFX Library`
-
-### Built-in Arduino / framework libraries used
-
-- `EEPROM`
-- `Wire`
-
-### Earlier libraries not used in the final build
-
-- `adafruit/Adafruit MPU6050`
-- `adafruit/Adafruit Unified Sensor`
-
-## Getting Started
-
-### Requirements
-
-- Visual Studio Code
-- PlatformIO IDE extension
-- Arduino Nano connected by USB
-
-### Open the project
-
-Clone the repository and open it in VS Code:
+Example:
 
 ```bash
-git clone <your-repo-url>
-cd arduino-tilt-game-console
-```
-
-### Build
-
-Use the PlatformIO build button or run:
-
-```bash
+cd arduino-tilt-arcade-console
 pio run
 ```
 
-### Upload
+## Uploading
 
-Use the PlatformIO upload button or run:
-
-```bash
-pio run --target upload
-```
-
-### Serial Monitor
-
-Open the PlatformIO Serial Monitor or run:
+For newer Arduino Nano boards or clones using the new bootloader:
 
 ```bash
-pio device monitor
+pio run -e nanoatmega328new -t upload --upload-port COM3
 ```
 
-## Project Structure
+If upload fails because your Nano uses the old bootloader:
 
-```text
-src/main.cpp        Main game logic, menu, IMU handling, rendering, sounds
-platformio.ini      PlatformIO configuration and dependencies
-README.md           Project overview and setup instructions
-docs/images/        Recommended location for screenshots and build photos
+```bash
+pio run -e nanoatmega328old -t upload --upload-port COM3
 ```
 
-## Notes / Limitations
+If the board appears on a different port, check connected devices:
 
-- The sensor handling is tuned for the physical orientation used in this build.
-- The motion sensor support is custom for an MPU-6500-family device rather than a standard MPU6050 library setup.
-- The OLED module used has a yellow top band and blue lower area, which is normal for some displays.
-- `Avoid Holes` was removed from the final version because it was not completed.
-- Flash memory usage is relatively high, so large extra features would need careful optimization.
+```bash
+pio device list
+```
 
-## Future Improvements
+## Notes
 
-- Add a second maze level or difficulty mode
-- Add simple transitions or animations
-- Improve Coin Collector visuals
-- Add a proper wiring diagram graphic
-- Add a short gameplay GIF or demo video
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+- The unfinished fluid simulator experiment is intentionally ignored for now.
+- Each finished project remains its own PlatformIO project with its own `platformio.ini`.
+- Keeping projects separate avoids breaking working sketches while still grouping them in one GitHub repository.
