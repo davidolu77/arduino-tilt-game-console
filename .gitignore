@@ -22,3 +22,8 @@ desktop.ini
 
 # Unfinished experiments
 arduino-fluid-simulator/
+esp32-oled-robot-face-35modes-test/
+esp32-tilt-arcade-console/
+external/
+reference/
+bob-vector-face-export.tar.gz
